@@ -64,7 +64,7 @@ func TestToZoektQuery(t *testing.T) {
 				},
 			},
 			&regexMatcher{
-				re:         regexp.MustCompile("Cccc?"),
+				re:         regexp.MustCompile("cccc?"),
 				ignoreCase: true,
 			},
 		},
@@ -79,18 +79,18 @@ func TestToZoektQuery(t *testing.T) {
 		name:         "matches content only",
 		matchContent: true,
 		matchPath:    false,
-		want:         `(and (or (not case_regex:"aaaaa") case_regex:"bbbb*") regex:"Cccc?")`,
+		want:         `(and (or (not case_regex:"aaaaa") case_regex:"bbbb*") regex:"cccc?")`,
 	},{
 		name:         "matches path only",
 		matchContent: false,
 		matchPath:    true,
-		want:         `(and (or (not case_file_regex:"aaaaa") case_file_regex:"bbbb*") file_regex:"Cccc?")`,
+		want:         `(and (or (not case_file_regex:"aaaaa") case_file_regex:"bbbb*") file_regex:"cccc?")`,
 	},
 	{
 		name:         "matches content and path",
 		matchContent: true,
 		matchPath:    true,
-		want:         `(and (or (not case_regex:"aaaaa") (not case_file_regex:"aaaaa") case_regex:"bbbb*" case_file_regex:"bbbb*") (or regex:"Cccc?" file_regex:"Cccc?"))`,
+		want:         `(and (or (not case_regex:"aaaaa") (not case_file_regex:"aaaaa") case_regex:"bbbb*" case_file_regex:"bbbb*") (or regex:"cccc?" file_regex:"cccc?"))`,
 	},
 	}
 
@@ -101,6 +101,60 @@ func TestToZoektQuery(t *testing.T) {
 				t.Fatal(err)
 			}
 			require.Equal(t, c.want, query.Simplify(got).String())
+		})
+	}
+}
+
+func TestMatchesString(t *testing.T) {
+	m := &orMatcher{
+		children: []matcher{
+			&andMatcher{
+				children: []matcher{
+					&regexMatcher{
+						re:        regexp.MustCompile("aaa"),
+						isNegated: true,
+					},
+					&regexMatcher{
+						re: regexp.MustCompile("bbb*"),
+					},
+					&regexMatcher{
+						re: regexp.MustCompile("ccc*"),
+					},
+				},
+			},
+			&regexMatcher{
+				re:         regexp.MustCompile("ddd?"),
+				ignoreCase: true,
+			},
+		},
+	}
+
+	cases := []struct {
+		name      string
+		test      string
+		wantMatch bool
+	}{
+		{
+			name:      "first 'or' clause matches",
+			test:      "bbbbbccc",
+			wantMatch: true,
+		},
+		{
+			name:      "negated 'and' clause does not match",
+			test:      "aaabbbccc",
+			wantMatch: false,
+		},
+		{
+			name:      "case insensitive 'or' clause matches",
+			test:      "zzzzzDDD",
+			wantMatch: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.test, func(t *testing.T) {
+			match := m.MatchesString(c.test)
+			require.Equal(t, c.wantMatch, match)
 		})
 	}
 }
