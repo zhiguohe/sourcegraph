@@ -469,7 +469,7 @@ func TestRegexSearch(t *testing.T) {
 			name: "and matcher with matches",
 			args: args{
 				ctx: context.Background(),
-				m: &andMatcher{
+				m: &orMatcher{
 					children: []matcher{
 						&regexMatcher{
 							re: regexp.MustCompile("aaaaa"),
@@ -510,6 +510,58 @@ func TestRegexSearch(t *testing.T) {
 						},
 						&regexMatcher{
 							re: regexp.MustCompile("22222"),
+						},
+					}},
+				pm: match,
+				zf: file,
+				patternMatchesPaths:   false,
+				patternMatchesContent: true,
+				limit:                 5,
+			},
+			wantFm: nil,
+		},
+		{
+			name: "or matcher with matches",
+			args: args{
+				ctx: context.Background(),
+				m: &orMatcher{
+					children: []matcher{
+						&regexMatcher{
+							re: regexp.MustCompile("aaaaa"),
+						},
+						&regexMatcher{
+							re: regexp.MustCompile("99999"),
+						},
+					}},
+				pm: match,
+				zf: file,
+				patternMatchesPaths:   false,
+				patternMatchesContent: true,
+				limit:                 5,
+			},
+			wantFm: []protocol.FileMatch{{
+				Path: "a.go",
+				ChunkMatches: []protocol.ChunkMatch{{
+					Content: "aaaaa11111",
+					ContentStart: protocol.Location{0, 0, 0},
+					Ranges: []protocol.Range{{
+						Start: protocol.Location{0, 0, 0},
+						End: protocol.Location{5, 0, 5},
+					}},
+				}},
+			}},
+		},
+		{
+			name: "or matcher with no match",
+			args: args{
+				ctx: context.Background(),
+				m: &orMatcher{
+					children: []matcher{
+						&regexMatcher{
+							re: regexp.MustCompile("jjjjj"),
+						},
+						&regexMatcher{
+							re: regexp.MustCompile("99999"),
 						},
 					}},
 				pm: match,

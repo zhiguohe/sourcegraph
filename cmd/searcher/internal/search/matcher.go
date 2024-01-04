@@ -75,6 +75,50 @@ func (am *andMatcher) String() string {
 	return fmt.Sprintf("AND (%d children)", len(am.children))
 }
 
+type orMatcher struct {
+	children []matcher
+}
+
+func (om *orMatcher) MatchesString(s string) bool {
+	for _, m := range om.children {
+		if m.MatchesString(s) {
+			return true
+		}
+	}
+	return false
+}
+
+// TODO(jtibs): remove overlapping ranges
+func (om *orMatcher) MatchesFile(fileBuf []byte, limit int) (bool, [][]int) {
+	match := false
+	var matches [][]int
+	for _, m := range om.children {
+		childMatch, childMatches := m.MatchesFile(fileBuf, limit)
+		match = match || childMatch
+		matches = append(matches, childMatches...)
+		limit -= len(childMatches)
+	}
+
+	sort.Sort(matchSlice(matches))
+	return match, matches
+}
+
+func (om *orMatcher) ToZoektQuery(matchContent bool, matchPath bool) (zoektquery.Q, error) {
+	var children []zoektquery.Q
+	for _, m := range om.children {
+		q, err := m.ToZoektQuery(matchContent, matchPath)
+		if err != nil {
+			return nil, err
+		}
+		children = append(children, q)
+	}
+	return &zoektquery.Or{Children: children}, nil
+}
+
+func (om *orMatcher) String() string {
+	return fmt.Sprintf("OR (%d children)", len(om.children))
+}
+
 type matchSlice [][]int
 
 func (ms matchSlice) Len() int {
