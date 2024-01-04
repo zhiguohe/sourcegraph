@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/grafana/regexp"
+	"github.com/sourcegraph/zoekt/query"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLongestLiteral(t *testing.T) {
@@ -44,5 +46,61 @@ func TestLongestLiteral(t *testing.T) {
 		if want != got {
 			t.Errorf("longestLiteral(%q) == %q != %q", expr, got, want)
 		}
+	}
+}
+
+func TestToZoektQuery(t *testing.T) {
+	m := &andMatcher{
+		children: []matcher{
+			&orMatcher{
+				children: []matcher{
+					&regexMatcher{
+						re:        regexp.MustCompile("aaaaa"),
+						isNegated: true,
+					},
+					&regexMatcher{
+						re: regexp.MustCompile("bbbb*"),
+					},
+				},
+			},
+			&regexMatcher{
+				re:         regexp.MustCompile("Cccc?"),
+				ignoreCase: true,
+			},
+		},
+	}
+
+	cases := []struct {
+		name         string
+		matchContent bool
+		matchPath    bool
+		want           string
+	}{{
+		name:         "matches content only",
+		matchContent: true,
+		matchPath:    false,
+		want:         `(and (or (not case_regex:"aaaaa") case_regex:"bbbb*") regex:"Cccc?")`,
+	},{
+		name:         "matches path only",
+		matchContent: false,
+		matchPath:    true,
+		want:         `(and (or (not case_file_regex:"aaaaa") case_file_regex:"bbbb*") file_regex:"Cccc?")`,
+	},
+	{
+		name:         "matches content and path",
+		matchContent: true,
+		matchPath:    true,
+		want:         `(and (or (not case_regex:"aaaaa") (not case_file_regex:"aaaaa") case_regex:"bbbb*" case_file_regex:"bbbb*") (or regex:"Cccc?" file_regex:"Cccc?"))`,
+	},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := m.ToZoektQuery(c.matchContent, c.matchPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.Equal(t, c.want, query.Simplify(got).String())
+		})
 	}
 }
