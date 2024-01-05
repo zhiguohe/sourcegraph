@@ -74,7 +74,7 @@ func TestToZoektQuery(t *testing.T) {
 		name         string
 		matchContent bool
 		matchPath    bool
-		want           string
+		want         string
 	}{{
 		name:         "matches content only",
 		matchContent: true,
@@ -155,6 +155,75 @@ func TestMatchesString(t *testing.T) {
 		t.Run(c.test, func(t *testing.T) {
 			match := m.MatchesString(c.test)
 			require.Equal(t, c.wantMatch, match)
+		})
+	}
+}
+
+func TestMatchesFile(t *testing.T) {
+	m := &orMatcher{
+		children: []matcher{
+			&andMatcher{
+				children: []matcher{
+					&regexMatcher{
+						re:        regexp.MustCompile("and"),
+						isNegated: true,
+					},
+					&regexMatcher{
+						re: regexp.MustCompile("file"),
+					},
+					&regexMatcher{
+						re: regexp.MustCompile("the"),
+					},
+				},
+			},
+			&regexMatcher{
+				re:         regexp.MustCompile("here"),
+				ignoreCase: true,
+			},
+		},
+	}
+
+	cases := []struct {
+		m matcher
+		file        string
+		wantMatch   bool
+		wantMatches int
+	}{
+		{
+			m: m,
+			file:      "this is the first file",
+			wantMatch: true,
+			wantMatches: 2,
+		},
+		{
+			m: m,
+			file:      "here is the second fileee",
+			wantMatch: true,
+			wantMatches: 3,
+		},
+		{
+			m: m,
+			file:      "... and another file!",
+			wantMatch: false,
+			wantMatches: 0,
+		},
+		{
+			m: &regexMatcher{
+				re: regexp.MustCompile("excluded"),
+				isNegated: true,
+			},
+			file:      "here's a file",
+			// this matches, but produces no matched ranges
+			wantMatch: true,
+			wantMatches: 0,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.file, func(t *testing.T) {
+			match, matches := c.m.MatchesFile([]byte(c.file), 1000)
+			require.Equal(t, c.wantMatch, match)
+			require.Equal(t, c.wantMatches, len(matches))
 		})
 	}
 }
