@@ -12,7 +12,7 @@ const bundlesRepoName = 'sourcegraph-extensions-bundles'
  * extensions bundles to the specified path. These bundles may be included into IDE/browser extensions bundles
  * in order not to require access to the extensions registry for the code intel features to work.
  */
-function buildCodeIntelExtensions({ pathToExtensionBundles, revision }) {
+function fetchAndBuildCodeIntelExtensions({ pathToExtensionBundles, revision }) {
   const pathToDistributionRevisionFile = path.join(pathToExtensionBundles, 'revision.txt')
 
   const currentRevision =
@@ -32,6 +32,7 @@ function buildCodeIntelExtensions({ pathToExtensionBundles, revision }) {
   if (result.code !== 0) {
     console.error('Curl command failed with exit code:', result.code)
     console.error('Error message:', result.stderr)
+    return
   }
 
   // when repo archive is unpacked the leading 'v' from tag is trimmed: v1.0.0.zip => sourcegraph-extensions-bundles-1.0.0
@@ -45,9 +46,11 @@ function buildCodeIntelExtensions({ pathToExtensionBundles, revision }) {
   shelljs.exec(`unzip -q ${revision}.zip`)
   // Remove bundles repo archive
   shelljs.exec(`rm ${revision}.zip`)
+}
 
+function buildCodeIntelExtensions({ extensionBundlesSrc, extensionBundlesDest, revision }) {
   const codeIntelExtensionIds = [] // list of cloned code intel extension ids, e.g. [..., 'sourcegraph/typescript', ...]
-  const content = fs.readdirSync(path.join(bundlesRepoDirectoryName, 'bundles'), { withFileTypes: true })
+  const content = fs.readdirSync(path.join(extensionBundlesSrc, 'bundles'), { withFileTypes: true })
 
   for (const item of content) {
     if (!item.isDirectory()) {
@@ -56,7 +59,7 @@ function buildCodeIntelExtensions({ pathToExtensionBundles, revision }) {
 
     const extensionName = item.name // kebab-case extension name, e.g. 'sourcegraph-typescript'
 
-    const bundlePath = path.join(bundlesRepoDirectoryName, 'bundles', extensionName)
+    const bundlePath = path.join(extensionBundlesSrc, 'bundles', extensionName)
     const files = fs.readdirSync(bundlePath)
 
     if (['package.json', `${extensionName}.js`].some(file => !files.includes(file))) {
@@ -77,13 +80,13 @@ function buildCodeIntelExtensions({ pathToExtensionBundles, revision }) {
       continue
     }
 
-    shelljs.mkdir('-p', path.join(pathToExtensionBundles, extensionName))
+    shelljs.mkdir('-p', path.join(extensionBundlesDest, extensionName))
     shelljs.exec(
-      `cp ${path.join(bundlePath, 'package.json')} ${path.join(pathToExtensionBundles, extensionName, 'package.json')}`
+      `cp ${path.join(bundlePath, 'package.json')} ${path.join(extensionBundlesDest, extensionName, 'package.json')}`
     )
     shelljs.exec(
       `cp ${path.join(bundlePath, `${extensionName}.js`)} ${path.join(
-        pathToExtensionBundles,
+        extensionBundlesDest,
         extensionName,
         'extension.js'
       )}`
@@ -93,7 +96,7 @@ function buildCodeIntelExtensions({ pathToExtensionBundles, revision }) {
   }
 
   // Remove bundles repo directory and archive
-  shelljs.exec(`rm -rf ${bundlesRepoDirectoryName}`)
+  // shelljs.exec(`rm -rf ${extensionBundlesSrc}`)
 
   // Save sourcegraph-extensions-bundles revision not to refetch it on the next calls if the revision doesn't change
   fs.writeFileSync(pathToDistributionRevisionFile, revision)
@@ -104,18 +107,18 @@ function buildCodeIntelExtensions({ pathToExtensionBundles, revision }) {
   signale.success('Code intel extensions bundles successfully copied.')
 }
 
-module.exports = { buildCodeIntelExtensions }
+module.exports = { buildCodeIntelExtensions, fetchAndBuildCodeIntelExtensions }
 
 // Use this script in Bazel. Remove `module.exports` once the Bazel migration is completed.
 function main(args) {
-  if (args.length !== 2) {
-    throw new Error('Usage: <revision> <outputPath>')
+  if (args.length !== 3) {
+    throw new Error('Usage: <revision> <inputPath> <outputPath>')
   }
 
-  const [revision, outputPath] = args
+  const [revision, inputPath, outputPath] = args
   const output = path.join(process.cwd(), outputPath)
 
-  buildCodeIntelExtensions({ pathToExtensionBundles: output, revision })
+  buildCodeIntelExtensions({ extensionBundlesSrc: inputPath, extensionBundlesDest: output, revision })
 }
 
 if (require.main === module) {

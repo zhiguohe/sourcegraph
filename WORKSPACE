@@ -1,4 +1,4 @@
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 
 http_archive(
     name = "bazel_skylib",
@@ -349,6 +349,7 @@ load("@hermetic_cc_toolchain//toolchain:defs.bzl", zig_toolchains = "toolchains"
 zig_toolchains(
     host_platform_sha256 = {
         "macos-aarch64": "ed946cd65d00b18342d9a9ee9666b0869025ac2cd544a0fec3c337b5b0ee53c3",
+        "linux-x86_64": "660cc63a8c3991220a5a2d2b6cd478da9bc2a44b4c18efd0cc8f6ab1156bfd12",
     },
     # Fixes flakiness with zig 0.11.0
     # https://bazelbuild.slack.com/archives/C04N6NE1GRM/p1704306009190609?thread_ts=1704306009.190609&cid=C04N6NE1GRM
@@ -434,3 +435,17 @@ gazelle_buf_dependencies()
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 
 protobuf_deps()
+
+http_archive(
+    name = "sourcegraph_extensions_bundle",
+    build_file_content = """
+filegroup(
+    name = "srcs",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"]
+)
+    """,
+    integrity = "sha256-Spx8LyM7k+dsGOlZ4TdAq+CNk5EzvYB/oxnY4zGpqPg=",
+    strip_prefix = "sourcegraph-extensions-bundles-5.0.1",
+    url = "https://github.com/sourcegraph/sourcegraph-extensions-bundles/archive/v5.0.1.zip",
+)

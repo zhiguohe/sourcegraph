@@ -18,11 +18,16 @@ def build_code_intel_extensions(name, out, revision):
         silent_on_success = False,
         args = [
             revision,
+            "$(location @sourcegraph_extensions_bundle//:package.json)/..",
             out,
         ],
+        srcs = [
+            "@sourcegraph_extensions_bundle//:package.json",
+        ],
+        copy_srcs_to_bin = False,
         tags = [
             # We download static assets from GitHub.
-            "requires-network",
+            # "requires-network",
         ],
         tool = "//client/shared/dev:build_code_intel_extensions",
     )
