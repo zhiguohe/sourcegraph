@@ -9,6 +9,9 @@ import (
 	"github.com/sourcegraph/managed-services-platform-cdktf/gen/google/monitoringnotificationchannel"
 	opsgenieintegration "github.com/sourcegraph/managed-services-platform-cdktf/gen/opsgenie/apiintegration"
 	"github.com/sourcegraph/managed-services-platform-cdktf/gen/opsgenie/dataopsgenieteam"
+	"github.com/sourcegraph/managed-services-platform-cdktf/gen/sentry/datasentryorganizationintegration"
+	"github.com/sourcegraph/managed-services-platform-cdktf/gen/sentry/notificationaction"
+	sentryproject "github.com/sourcegraph/managed-services-platform-cdktf/gen/sentry/project"
 	slackconversation "github.com/sourcegraph/managed-services-platform-cdktf/gen/slack/conversation"
 
 	"github.com/sourcegraph/sourcegraph/dev/managedservicesplatform/googlesecretsmanager"
@@ -18,6 +21,7 @@ import (
 	"github.com/sourcegraph/sourcegraph/dev/managedservicesplatform/internal/stack"
 	"github.com/sourcegraph/sourcegraph/dev/managedservicesplatform/internal/stack/options/googleprovider"
 	"github.com/sourcegraph/sourcegraph/dev/managedservicesplatform/internal/stack/options/opsgenieprovider"
+	"github.com/sourcegraph/sourcegraph/dev/managedservicesplatform/internal/stack/options/sentryprovider"
 	"github.com/sourcegraph/sourcegraph/dev/managedservicesplatform/internal/stack/options/slackprovider"
 	"github.com/sourcegraph/sourcegraph/dev/managedservicesplatform/spec"
 	"github.com/sourcegraph/sourcegraph/lib/errors"
@@ -93,6 +97,8 @@ type Variables struct {
 	// Owners is a list of team names. Each owner MUST correspond to the name
 	// of a team in Opsgenie.
 	Owners []string
+	// SentryProject is the project in Sentry for the service environment
+	SentryProject sentryproject.Project
 }
 
 const StackName = "monitoring"
@@ -108,6 +114,10 @@ func NewStack(stacks *stack.Set, vars Variables) (*CrossStackOutput, error) {
 		}),
 		slackprovider.With(gsmsecret.DataConfig{
 			Secret:    googlesecretsmanager.SecretSlackOperatorOAuthToken,
+			ProjectID: googlesecretsmanager.SharedSecretsProjectID,
+		}),
+		sentryprovider.With(gsmsecret.DataConfig{
+			Secret:    googlesecretsmanager.SecretSentryAuthToken,
 			ProjectID: googlesecretsmanager.SharedSecretsProjectID,
 		}))
 	if err != nil {
@@ -220,6 +230,24 @@ func NewStack(stacks *stack.Set, vars Variables) (*CrossStackOutput, error) {
 
 				// In case it already exists
 				AdoptExistingChannel: pointers.Ptr(true),
+			})
+
+			// Sentry Slack integration
+			dataSentryOrganizationIntegration := datasentryorganizationintegration.NewDataSentryOrganizationIntegration(stack, id.TerraformID("sentry_integration"), &datasentryorganizationintegration.DataSentryOrganizationIntegrationConfig{
+				Organization: vars.SentryProject.Organization(),
+				ProviderKey:  pointers.Ptr("slack"),
+				Name:         pointers.Ptr("Sourcegraph"),
+			})
+
+			// Provision Sentry Slack notification
+			_ = notificationaction.NewNotificationAction(stack, id.TerraformID("sentry_notification_channel"), &notificationaction.NotificationActionConfig{
+				Organization:     vars.SentryProject.Organization(),
+				Projects:         &[]*string{vars.SentryProject.Slug()},
+				ServiceType:      pointers.Ptr("slack"),
+				IntegrationId:    dataSentryOrganizationIntegration.Id(),
+				TargetDisplay:    slackChannel.Name(),
+				TargetIdentifier: slackChannel.Id(),
+				TriggerType:      pointers.Ptr("spike-protection"),
 			})
 		}
 

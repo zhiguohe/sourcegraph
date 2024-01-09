@@ -141,6 +141,7 @@ func (r *Renderer) RenderEnvironment(
 		EnvironmentCategory: env.Category,
 		EnvironmentID:       env.ID,
 		Owners:              svc.Owners,
+		SentryProject:       cloudrunOutput.SentryProject,
 	}); err != nil {
 		return nil, errors.Wrap(err, "failed to create monitoring stack")
 	}
